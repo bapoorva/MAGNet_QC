@@ -7,28 +7,43 @@ library(dplyr)
 library(tidyr)
 library(data.table)
 library(ggplot2)
+library(DT)
 
 shinyServer(function(input, output,session) {
-
+  
+  #Read the parameter file
+  readexcel = reactive({
+    file = read.csv("data/param.csv")
+  })
+  
+  #Get Project list and populate drop-down
+  output$projects = renderUI({
+    excel=readexcel()
+    prj=excel$projects
+    selectInput("projects","Select a project",as.list(as.character(prj)))
+  })
+  
+  
   #Read and cleanupthe results file
   readfile = reactive({
-    ipfile=input$file 
-    file <- fread(ipfile$datapath) %>% mutate(library= gsub('star_hg19/','',library))  %>%
-      separate(library,c('run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
+    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
+    file <- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
+      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
       select(-Startedjobon:-MappingspeedMillionofreadsperhour)
-    colnames(file)=c("run","lane","barcode","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads","pool")
+    #rownames(file)=file$id
+    #file=as.data.frame(file[,-1])
+    colnames(file)=c("id","run","lane","barcode","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads","pool")
     return(file)
   })
   
   #Create table for uniquely mapped reads with link to FASTQC html files
   table_unique = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
     dt = readfile()
     run=dt$run
     lane=dt$lane
     barcode=dt$barcode
+#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
     link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
 #     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
@@ -36,60 +51,53 @@ shinyServer(function(input, output,session) {
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:19],dt[,29:31])
+    dt=data.frame(dt[,1:20],dt[,30:32])
     return(dt)
   })
   #Create table for multi-mapped reads with link to FASTQC html files
   table_multi = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
     dt = readfile()
-    
     run=dt$run
     lane=dt$lane
     barcode=dt$barcode
-    link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-    link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
+    link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+    link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
     #     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
     #     url2= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link2_name)
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:4],dt[,20:23],dt[,29:31])
+    dt=data.frame(dt[,1:5],dt[,21:24],dt[,30:32])
     return(dt)
   })
   #Create table for unmapped reads with link to FASTQC html files
   table_unmapped = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
     dt = readfile()
     run=dt$run
     lane=dt$lane
     barcode=dt$barcode
-    link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-    link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
+    link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+    link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
     #     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
     #     url2= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link2_name)
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:4],dt[,24:31])
+    dt=data.frame(dt[,1:5],dt[,25:32])
     return(dt)
   })
   #~~~~~~~~~~~~~~~~~~~~
   output$table_unique = DT::renderDataTable({
-            DT::datatable(table_unique(),
-                          extensions = c('Buttons','Scroller'),
-                          options = list(dom = 'Bfrtip',
-                            searchHighlight = TRUE,
-                            pageLength = 10,
-                            lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
-                            scrollX = TRUE,
-                            buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
-                          ),selection = list(mode = 'single', selected =1),caption= "Uniquely mapped Reads",escape=FALSE)
-          })
+    DT::datatable(table_unique(),
+                  extensions =  c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),selection = list(mode = 'single', selected =1),caption= "Unique Reads",escape=FALSE)
+  })
           
           output$table_unmapped = DT::renderDataTable({
             DT::datatable(table_unmapped(),
@@ -99,7 +107,7 @@ shinyServer(function(input, output,session) {
                             pageLength = 10,
                             lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
                             scrollX = TRUE,
-                            buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                            buttons = c('copy','print')
                           ),selection = list(mode = 'single', selected =1),caption= "Unmapped Reads",escape=FALSE)
           })
           
@@ -111,7 +119,7 @@ shinyServer(function(input, output,session) {
                             pageLength = 10,
                             lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
                             scrollX = TRUE,
-                            buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                            buttons = c('copy', 'print')
                           ),selection = list(mode = 'single', selected =1),caption= "Multi-Mapped Reads",escape=FALSE)
           })
   #~~~~~~~~~~~~~~~~~~~~
@@ -133,9 +141,9 @@ shinyServer(function(input, output,session) {
   #~~~~~~~~~~~~~~~~~~~~
   #Generate box-plot (uniquely mapped)
   boxplot1_out = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
+#     validate(
+#       need(input$file, "Upload input file")
+#     )
     d=readfile()
     attr1=input$attr1
     v=paste("d$",attr1,sep="")
@@ -145,9 +153,9 @@ shinyServer(function(input, output,session) {
   })
   #Generate box-plot (multi-mapped)
   boxplot2_out = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
+#     validate(
+#       need(input$file, "Upload input file")
+#     )
     d=readfile()
     attr2=input$attr2
     v=paste("d$",attr2,sep="")
@@ -157,9 +165,9 @@ shinyServer(function(input, output,session) {
   })
   #Generate box-plot (unmapped)
   boxplot3_out = reactive({
-    validate(
-      need(input$file, "Upload input file")
-    )
+#     validate(
+#       need(input$file, "Upload input file")
+#     )
     d=readfile()
     attr3=input$attr3
     v=paste("d$",attr3,sep="")
@@ -194,34 +202,37 @@ shinyServer(function(input, output,session) {
       
       output$table_unique = DT::renderDataTable({
         DT::datatable(table_unique(),
-                      extensions = c('TableTools','ColVis','Scroller'),
-                      options = list(
-                        searchHighlight = TRUE,
-                        pageLength = 10,
-                        lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
-                        scrollX = TRUE
-                      ),selection = list(mode = 'single', selected =1),caption= "Uniquely mapped Reads",escape=FALSE)
+                      extensions = c('Buttons','Scroller'),
+                      options = list(dom = 'Bfrtip',
+                                     searchHighlight = TRUE,
+                                     pageLength = 10,
+                                     lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                     scrollX = TRUE,
+                                     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                      ),rownames=TRUE,selection = list(mode = 'single', selected =1),escape=FALSE,caption= "Unique Reads")
       })
       
       output$table_unmapped = DT::renderDataTable({
         DT::datatable(table_unmapped(),
-                      extensions = c('TableTools','ColVis','Scroller'),
-                      options = list(
-                        searchHighlight = TRUE,
-                        pageLength = 10,
-                        lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
-                        scrollX = TRUE
-                      ),selection = list(mode = 'single', selected =1),caption= "Unmapped Reads",escape=FALSE)
+                      extensions = c('Buttons','Scroller'),
+                      options = list(dom = 'Bfrtip',
+                                     searchHighlight = TRUE,
+                                     pageLength = 10,
+                                     lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                     scrollX = TRUE,
+                                     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
+                      ),rownames=TRUE,selection = list(mode = 'single', selected =1),escape=FALSE,caption= "Unmapped Reads")
       })
       
       output$table_multi = DT::renderDataTable({
         DT::datatable(table_multi(),
-                      extensions = c('TableTools','ColVis','Scroller'),
-                      options = list(
-                        searchHighlight = TRUE,
-                        pageLength = 10,
-                        lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
-                        scrollX = TRUE
+                      extensions = c('Buttons','Scroller'),
+                      options = list(dom = 'Bfrtip',
+                                     searchHighlight = TRUE,
+                                     pageLength = 10,
+                                     lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                     scrollX = TRUE,
+                                     buttons = c('copy', 'csv', 'excel', 'pdf', 'print')
                       ),selection = list(mode = 'single', selected =1),caption= "Multi-Mapped Reads",escape=FALSE)
       })
       
