@@ -1,3 +1,5 @@
 # MAGnet_RNAseq
 
-To Be Completed later
+Webpage to view MAGnet Data 
+
+Includes links to FASTQC files 
