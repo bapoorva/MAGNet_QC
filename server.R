@@ -184,6 +184,7 @@ shinyServer(function(input, output,session) {
             lapply(input$stats,function(s){ #for either upregulated/downregulated selected
               call("tabPanel",s,
                    call('dataTableOutput',paste0("table_",s)),
+                   call("downloadButton",paste0("save_",s),'Save as csv'),
                    call('uiOutput',paste0("ui_",s)),
                    call("plotlyOutput",paste0("boxplot_",s))
               )
@@ -240,7 +241,21 @@ shinyServer(function(input, output,session) {
       output[['boxplot_unique']] = renderPlotly({boxplot1_out()})
       output[['boxplot_multi']] = renderPlotly({boxplot2_out()})
       output[['boxplot_unmapped']] = renderPlotly({boxplot3_out()})
-
+      
+      
+      output[['save_unique']] <- downloadHandler(
+        filename = function() { paste0("unique",".csv") },
+        content = function(file) { write.csv(table_unique(),file=file,row.names=FALSE) }
+      )
+      output[['save_unmapped']] <- downloadHandler(
+        filename = function() { paste0("unmapped",".csv") },
+        content = function(file) { write.csv(table_unmapped(),file=file,row.names=FALSE) }
+      )
+      output[['save_multi']] <- downloadHandler(
+        filename = function() { paste0("multi",".csv") },
+        content = function(file) { write.csv(table_multi(),file=file,row.names=FALSE) }
+      )
+      
       return(s)
     })
   })
