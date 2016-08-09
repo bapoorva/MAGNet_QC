@@ -36,18 +36,64 @@ shinyServer(function(input, output,session) {
     return(file)
   })
   
+  barplot = reactive({
+    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
+    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
+      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
+      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    d=d[d$run==input$run,]
+    d=d[d$lane==input$lane,]
+    #d$lib=paste0(d$run,"_",d$lane)
+    #d$library=d$lib
+    gg=d %>% select(id,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped:toomanymismatches`,`ofreadsunmapped:tooshort`,`ofreadsunmapped:other`) %>%
+      gather("maptype","perc",-id) %>% ggplot(.,aes(x=id,y=perc,fill=maptype))+geom_bar(stat="identity", colour="white")+  scale_fill_brewer(palette="Dark2")+
+      theme_bw()+theme(
+        plot.margin=unit(x=c(0,0,0,0),units="mm"),
+        legend.position="top",
+        axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
+      ) + ylab('% Reads') 
+    (gg <- ggplotly(gg))
+    #return(gg)
+  })
+  
+  output$barplot_out = renderPlotly({
+    barplot()
+  })
+  
+  output$baroptions <- renderUI({
+    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
+    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
+      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
+      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    run=unique(d$run)
+    selectInput("run", "Select run",as.list(as.character(run)))
+  })
+  
+  output$laneoptions <- renderUI({
+    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
+    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
+      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
+      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    d=d[d$run==input$run,]
+    lane=sort(as.numeric(unique(d$lane)))
+    selectInput("lane", "Select lane",as.list(as.character(lane)))
+  })
+  
+  observe({
+    if(input$barplotop>0){
+      updateTabsetPanel(session = session, inputId = 'tabvalue', selected = 'tab1')}
+    #toggle(condition =input$barplot,selector = "#tabvalue li a[data-value=tab1]")
+  })
+  
+  
   #Create table for uniquely mapped reads with link to FASTQC html files
   table_unique = reactive({
     dt = readfile()
     run=dt$run
     lane=dt$lane
     barcode=dt$barcode
-#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
     link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-#     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
-#     url2= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link2_name)
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
@@ -62,8 +108,6 @@ shinyServer(function(input, output,session) {
     barcode=dt$barcode
     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    #     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
-    #     url2= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link2_name)
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
@@ -78,8 +122,6 @@ shinyServer(function(input, output,session) {
     barcode=dt$barcode
     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    #     url1= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link1_name)
-    #     url2= paste0("file:///Users/bapoorva/Desktop/Shiny/MAGnet_RNAseq/fastQC/",link2_name)
     dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
     dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
     dt=as.data.frame(dt)
@@ -141,9 +183,6 @@ shinyServer(function(input, output,session) {
   #~~~~~~~~~~~~~~~~~~~~
   #Generate box-plot (uniquely mapped)
   boxplot1_out = reactive({
-#     validate(
-#       need(input$file, "Upload input file")
-#     )
     d=readfile()
     attr1=input$attr1
     v=paste("d$",attr1,sep="")
@@ -153,9 +192,6 @@ shinyServer(function(input, output,session) {
   })
   #Generate box-plot (multi-mapped)
   boxplot2_out = reactive({
-#     validate(
-#       need(input$file, "Upload input file")
-#     )
     d=readfile()
     attr2=input$attr2
     v=paste("d$",attr2,sep="")
@@ -165,9 +201,6 @@ shinyServer(function(input, output,session) {
   })
   #Generate box-plot (unmapped)
   boxplot3_out = reactive({
-#     validate(
-#       need(input$file, "Upload input file")
-#     )
     d=readfile()
     attr3=input$attr3
     v=paste("d$",attr3,sep="")
