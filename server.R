@@ -23,57 +23,51 @@ shinyServer(function(input, output,session) {
     selectInput("projects","Select a project",as.list(as.character(prj)))
   })
   
-  
-  #Read and cleanupthe results file
-  readfile = reactive({
+  #Read the file
+  inputfile = reactive({
     inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
     file <- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
       separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
       select(-Startedjobon:-MappingspeedMillionofreadsperhour)
-    #rownames(file)=file$id
-    #file=as.data.frame(file[,-1])
+  })
+  
+  #cleanupthe results file
+  readfile = reactive({
+    file=inputfile()
     colnames(file)=c("id","run","lane","barcode","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads","pool")
     return(file)
   })
   
+  #create bar graph for selected run and lane
   barplot = reactive({
-    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
-    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
-      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
-      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    d<- inputfile()
     d=d[d$run==input$run,]
     d=d[d$lane==input$lane,]
-    #d$lib=paste0(d$run,"_",d$lane)
-    #d$library=d$lib
     gg=d %>% select(id,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped:toomanymismatches`,`ofreadsunmapped:tooshort`,`ofreadsunmapped:other`) %>%
       gather("maptype","perc",-id) %>% ggplot(.,aes(x=id,y=perc,fill=maptype))+geom_bar(stat="identity", colour="white")+  scale_fill_brewer(palette="Dark2")+
       theme_bw()+theme(
         plot.margin=unit(x=c(0,0,0,0),units="mm"),
         legend.position="top",
         axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
-      ) + ylab('% Reads') 
+      ) + ylab('% Reads') %>% layout(legend = list(x = 0.5, y = 0))
     (gg <- ggplotly(gg))
-    #return(gg)
   })
   
+  # bar graph output
   output$barplot_out = renderPlotly({
     barplot()
   })
   
+  #populate drop down (run)
   output$baroptions <- renderUI({
-    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
-    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
-      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
-      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
-    run=unique(d$run)
+    d<- inputfile()
+    run=sort(unique(d$run))
     selectInput("run", "Select run",as.list(as.character(run)))
   })
   
+  #populate drop down (lane)
   output$laneoptions <- renderUI({
-    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
-    d<- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
-      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
-      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    d<- inputfile()
     d=d[d$run==input$run,]
     lane=sort(as.numeric(unique(d$lane)))
     selectInput("lane", "Select lane",as.list(as.character(lane)))
@@ -82,10 +76,45 @@ shinyServer(function(input, output,session) {
   observe({
     if(input$barplotop>0){
       updateTabsetPanel(session = session, inputId = 'tabvalue', selected = 'tab1')}
-    #toggle(condition =input$barplot,selector = "#tabvalue li a[data-value=tab1]")
   })
   
+  ####################################
+  ####################################
+  #populate drop down (samples)
+  output$indoptions <- renderUI({
+    d<- inputfile()
+    ind=sort(unique(d$id))
+    selectInput("ind", "Select lane",as.list(as.character(ind)))
+  })
   
+  #create bar graph for selected samples
+  barplotind = reactive({
+    d<- inputfile()
+    d=d[d$id==input$ind,]
+    d$lib=paste0(d$run,"_",d$lane)
+    d$library=d$lib
+    p=d %>% select(library,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped:toomanymismatches`,`ofreadsunmapped:tooshort`,`ofreadsunmapped:other`) %>%
+      gather("maptype","perc",-library) %>% ggplot(.,aes(x=library,y=perc,fill=maptype))+geom_bar(stat="identity", colour="white")+  scale_fill_brewer(palette="Dark2")+
+      theme_bw()+theme(
+        plot.margin=unit(x=c(0,0,0,0),units="mm"),
+        legend.position="top",
+        axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
+      ) + ylab('% Reads')
+    (gg <- ggplotly(p))
+  })
+  
+ 
+  output$barplotsind_out = renderPlotly({
+    barplotind()
+  })
+  
+  observe({
+    if(input$barplotind>0){
+      updateTabsetPanel(session = session, inputId = 'tabvalue', selected = 'tab2')}
+  })
+  
+  ######################################
+  ######################################
   #Create table for uniquely mapped reads with link to FASTQC html files
   table_unique = reactive({
     dt = readfile()
@@ -94,10 +123,10 @@ shinyServer(function(input, output,session) {
     barcode=dt$barcode
     link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
-    dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
+    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
+    
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:20],dt[,30:32])
+    dt=data.frame(dt[,1:20],pool=dt[,30])
     return(dt)
   })
   #Create table for multi-mapped reads with link to FASTQC html files
@@ -108,10 +137,9 @@ shinyServer(function(input, output,session) {
     barcode=dt$barcode
     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
-    dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
+    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:5],dt[,21:24],dt[,30:32])
+    dt=data.frame(dt[,1:5],dt[,21:24],pool=dt[,30])
     return(dt)
   })
   #Create table for unmapped reads with link to FASTQC html files
@@ -122,10 +150,9 @@ shinyServer(function(input, output,session) {
     barcode=dt$barcode
     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$link1=paste0("<a href='",link1_name,"'target='_blank'>","Link to FASTQC1","</a>")
-    dt$link2=paste0("<a href='",link2_name,"'target='_blank'>","Link to FASTQC2","</a>")
+    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:5],dt[,25:32])
+    dt=data.frame(dt[,1:5],dt[,25:30])
     return(dt)
   })
   #~~~~~~~~~~~~~~~~~~~~
