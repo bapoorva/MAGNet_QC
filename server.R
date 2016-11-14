@@ -1,5 +1,5 @@
 library(shinydashboard)
-library(shinyIncubator)
+#library(shinyIncubator)
 library(shiny)
 library(plotly)
 library(shinyjs)
@@ -49,7 +49,8 @@ shinyServer(function(input, output,session) {
         plot.margin=unit(x=c(0,0,0,0),units="mm"),
         legend.position="top",
         axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
-      ) + ylab('% Reads') %>% layout(legend = list(x = 0.5, y = 0))
+      ) + ylab('% Reads') 
+    #%>% layout(legend = list(x = 0.5, y = 0))
     (gg <- ggplotly(gg))
   })
   
@@ -214,7 +215,7 @@ shinyServer(function(input, output,session) {
     attr1=input$attr1
     v=paste("d$",attr1,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=pool,y=v,color=pool,xlab=attr1, type = "box") %>%
+    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
       layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr1)))
   })
   #Generate box-plot (multi-mapped)
@@ -223,7 +224,7 @@ shinyServer(function(input, output,session) {
     attr2=input$attr2
     v=paste("d$",attr2,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=pool,y=v,color=pool,xlab=attr2, type = "box") %>%
+    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
       layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr2)))
   })
   #Generate box-plot (unmapped)
@@ -232,7 +233,7 @@ shinyServer(function(input, output,session) {
     attr3=input$attr3
     v=paste("d$",attr3,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=pool,y=v,color=pool,xlab=attr3, type = "box") %>%
+    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
       layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr3)))
   })
 
