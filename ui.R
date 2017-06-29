@@ -40,7 +40,7 @@ dashboardPage(
                  uiOutput("plotUI")
                ),
                box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
-                   selectInput("mapsumoptions","Select a project", c('Tissue_Source'='Tissue_Source','CHF_Etiology'='CHF_Etiology','Gender'='Gender','Race'='Race','Library_Pool'='Library_Pool')),
+                   selectInput("mapsumoptions","Select Group", c('Tissue_Source'='Tissue_Source','CHF_Etiology'='CHF_Etiology','Gender'='Gender','Race'='Race','Library_Pool'='Library_Pool')),
                    uiOutput("mapsum")
        ))),
        tabItem(tabName = "pheno",DT::dataTableOutput('anno')),
@@ -79,24 +79,46 @@ dashboardPage(
        
        tabItem(tabName = "bargraph",uiOutput("indoptions"),uiOutput("allsamp"),plotlyOutput("barplotsind_out",width = 1100, height = 800)),
   tabItem(tabName = "libcomp",
-          DT::dataTableOutput('libcomplex'),hr(),
           fluidRow(
-            column(6,uiOutput("xoptions")),
-            column(6,uiOutput("yoptions"))),
-          plotlyOutput("libc_bplot",width = 1200, height = 500)
-  ),
+            box(
+              width = 8, status = "primary",solidHeader = TRUE,
+              title = "Mapped Summary",
+              DT::dataTableOutput('libcomplex'),hr(),
+              plotlyOutput("libc_bplot",width = 1200, height = 500)
+            ),
+            box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
+                fluidRow(
+                  column(6,uiOutput("xoptions")),
+                  column(6,uiOutput("yoptions"))),
+                fluidRow(
+                  column(6,uiOutput("xop2")),
+                  column(6,hr()))
+            ))),
   tabItem(tabName = "Metrics",
-          DT::dataTableOutput('metrics'),
           fluidRow(
-            column(6,uiOutput("mxoptions")),
-            column(6,uiOutput("myoptions"))),
-          plotlyOutput("metr_bplot",width = 1200, height = 500)
-          
-  ),
+            box(
+              width = 8, status = "primary",solidHeader = TRUE,
+              title = "Mapped Summary",
+              DT::dataTableOutput('metrics'),hr(),
+              plotlyOutput("metr_bplot",width = 1200, height = 500)
+            ),
+            box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
+                fluidRow(
+                  column(6,uiOutput("mxoptions")),
+                  column(6,uiOutput("myoptions")))
+            ))),
   tabItem(tabName = "markdup",
-          DT::dataTableOutput('mrkdup'),
           fluidRow(
-            column(6,uiOutput("dxoptions")),
-            column(6,uiOutput("dyoptions"))),
-          plotlyOutput("mrkdup_bplot",width = 1200, height = 500)
-  ))))
+            box(
+              width = 8, status = "primary",solidHeader = TRUE,
+              title = "Mapped Summary",
+              DT::dataTableOutput('mrkdup'),hr(),
+              plotlyOutput("mrkdup_bplot",width = 1200, height = 500)
+            ),
+            box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
+                fluidRow(
+                  column(6,uiOutput("dxoptions")),
+                  column(6,uiOutput("dyoptions")))
+            )))
+  
+  )))

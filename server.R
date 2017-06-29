@@ -121,7 +121,7 @@ shinyServer(function(input, output,session) {
     sel=input$mapsumoptions
     v2=paste("pd$",sel,sep="")
     v2=unique(eval(parse(text=v2)))
-    selectInput("mapsumoptions2","Select a project",as.list(as.character(v2)))
+    selectInput("mapsumoptions2","Select one of the options",as.list(as.character(v2)))
   })
   
   #create bar graph for selected samples
@@ -150,13 +150,6 @@ shinyServer(function(input, output,session) {
   #Create table for uniquely mapped reads with link to FASTQC html files
   table_unique = reactive({
     dt = readfile()
-#     run=dt$run
-#     lane=dt$lane
-#     barcode=dt$barcode
-#     link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-#     link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-#     
     dt=as.data.frame(dt)
     dt=dt %>% dplyr::select(id:Insertionaveragelength)
     return(dt)
@@ -164,26 +157,12 @@ shinyServer(function(input, output,session) {
   #Create table for multi-mapped reads with link to FASTQC html files
   table_multi = reactive({
     dt = readfile()
-#     run=dt$run
-#     lane=dt$lane
-#     barcode=dt$barcode
-#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-#     dt=as.data.frame(dt)
     dt=dt %>% dplyr::select(id,Numberofinputreads,Numberofreadsmappedtomultipleloci:percentageofreadsmappedtotoomanyloci)
     return(dt)
   })
   #Create table for unmapped reads with link to FASTQC html files
   table_unmapped = reactive({
      dt = readfile()
-#     run=dt$run
-#     lane=dt$lane
-#     barcode=dt$barcode
-#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-    #dt=as.data.frame(dt)
     dt=dt %>% dplyr::select(id,Numberofinputreads,percentageofreadsunmapped_toomanymismatches:ofchimericreads)
     return(dt)
   })
@@ -417,6 +396,14 @@ return(df)
     selectInput("xoptions", "Select x attribute",as.list(as.character(fac)))
   })
   
+  output$xop2 <- renderUI({
+    pd=anno()
+    sel=input$xoptions
+    v2=paste("pd$",sel,sep="")
+    v2=unique(eval(parse(text=v2)))
+    selectInput("xop2","Select one of the options",as.list(as.character(v2)))
+  })
+  
   output$mxoptions <- renderUI({
     fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
     selectInput("mxoptions", "Select x attribute",as.list(as.character(fac)))
@@ -430,10 +417,6 @@ return(df)
   })
   
   output$dxoptions <- renderUI({
-    #pheno=readpheno()
-    #run=sort(unique(d$run))
-    #fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
-    #fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
     fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
     selectInput("dxoptions", "Select x attribute",as.list(as.character(fac)))
   })
@@ -449,16 +432,23 @@ return(df)
   #create bar graph for selected samples
   libcplot = reactive({
     d= libcomplex()
-    # pheno=anno()
-    all <-d
-    xoptions=input$xoptions
+    all=d
+    
+    pd=anno()
+    sel=input$xoptions
+    v2=paste("pd$",sel,sep="")
+    v2=eval(parse(text=v2))
+    d$group=ifelse(d$id %in% pd$Sample ==T,as.character(v2),"NA")
+    sel2=input$xop2
+    d=d[d$group==as.character(parse(text=sel2)),]
+    # xoptions=input$xoptions
     yoptions=input$yoptions
     yop=paste("all$",yoptions,sep="")
     yop=eval(parse(text=yop))
-    xop=paste("all$",xoptions,sep="")
-    xop=eval(parse(text=xop))
-    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
-    layout(title = "BOX PLOT",xaxis = list(title =as.character(input$xoptions)),yaxis = list(title = as.character(input$yoptions)))
+#     xop=paste("all$",xoptions,sep="")
+#     xop=eval(parse(text=xop))
+    p <- plot_ly(all,x=~id,y=yop,color=~id) %>%
+    layout(title = "BOX PLOT",xaxis = list(title =as.character(input$xoptions)),yaxis = list(title = as.character(input$yoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
 
@@ -473,7 +463,7 @@ return(df)
     xop=paste("all$",xoptions,sep="")
     xop=eval(parse(text=xop))
     p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
-      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)))
+      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
   
@@ -489,7 +479,7 @@ return(df)
     xop=paste("all$",xoptions,sep="")
     xop=eval(parse(text=xop))
     p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
-      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)))
+      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
   output$libc_bplot = renderPlotly({
@@ -536,7 +526,10 @@ return(df)
   
   output$maineffect <- renderUI({
     pData=anno()
-    selectInput("maineffect", "Select Group",as.list(as.character(colnames(pData))))
+    pd=colnames(pData)
+    remove=c("AGE","Weight","Height","HW","LV.Mass","LVEF","Sample","RIN","Random_Pool")
+    pd=pd[!pd %in% remove]
+    selectInput("maineffect", "Select Group",as.list(as.character(pd)))
   })
   
   plotbiplot = reactive({
@@ -546,9 +539,10 @@ return(df)
     STAR=fileload()
     v = STAR$eset
     maineffect=input$maineffect
+    pData<-phenoData(v)
     me=paste("pData$",maineffect,sep="")
     me2=eval(parse(text=me))
-    pData<-phenoData(v)
+    
     validate(
       need(input$pcslide, "Enter number of genes to view in biplot")
     )
