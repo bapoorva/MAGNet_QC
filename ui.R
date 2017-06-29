@@ -6,16 +6,24 @@ library(d3heatmap)
 library(shinyjs)
 
 dashboardPage(
-  dashboardHeader(title = "MAGnet RNA-Seq",titleWidth = 500),
+  dashboardHeader(title = "STAR summary",titleWidth = 300),
   dashboardSidebar(width = 300,
                    div(style="overflow-y: scroll"),
                    tags$head(tags$style(HTML(".sidebar { height: 90vh; overflow-y: auto; }" ))),
+                   sidebarMenu(
+                     menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard"))),
                    uiOutput("projects"),
-                   checkboxGroupInput("stats",label="Mapped Statistics",choices=list("Unique Reads"='unique',"Multi-Mapping Reads"='multi',"Unmapped Reads"='unmapped'),selected = 'unique'),
-                   hr(),
-                   actionButton(inputId = 'barplotop', label = 'Click to view Bar Graph - Run/Lane'),
-                   hr(),
-                   actionButton(inputId = 'barplotind', label = 'Click to view Bar Graph - Samples')
+                   sidebarMenu(
+                     menuItemOutput("menuitem_loaddata"),
+                     menuItem("PhenoData", tabName = "pheno", icon = icon("hand-o-right")),
+                     menuItem("FastQC Report", tabName = "fastqc", icon = icon("hand-o-right")),
+                     menuItem('PCA-Plot', tabName = 'pcaplot', icon = icon('hand-o-right')), 
+                     menuItem("Bargraph-Samples", tabName = "bargraph", icon = icon("bar-chart")),
+                     menuItem("Library Complexity Summary", tabName = "libcomp", icon = icon("hand-o-right")),
+                     menuItem("Metrics", tabName = "Metrics", icon = icon("hand-o-right")),
+                     menuItem("Mark Duplicates", tabName = "markdup", icon = icon("hand-o-right"))
+                   )#end of sidebar menu
+
 ),
 
   dashboardBody(
@@ -23,15 +31,72 @@ dashboardPage(
       tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
     ),
     useShinyjs(),
-    #uiOutput("plotUI"),
-    tabsetPanel(type="tabs", id = "tabvalue",
-                tabPanel(title = "Mapped stats", value = 'tab',uiOutput("plotUI")),
-                tabPanel(title = "Bar Graph - Run/Lane", value = 'tab1',
-                         fluidRow(
-                           column(6,uiOutput("baroptions")),
-                          column(6,uiOutput("laneoptions"))),
-                         plotlyOutput("barplot_out",width = 1500, height = 800)),
-                tabPanel(title = "Bar Graph - Samples", value = 'tab2',uiOutput("indoptions"),plotlyOutput("barplotsind_out",width = 1500, height = 800))
-    )
-)
-  )
+     tabItems(
+       tabItem(tabName = "dashboard",
+               fluidRow(
+               box(
+                 width = 8, status = "primary",solidHeader = TRUE,
+                 title = "Mapped Summary",
+                 uiOutput("plotUI")
+               ),
+               box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
+                   selectInput("mapsumoptions","Select a project", c('Tissue_Source'='Tissue_Source','CHF_Etiology'='CHF_Etiology','Gender'='Gender','Race'='Race','Library_Pool'='Library_Pool')),
+                   uiOutput("mapsum")
+       ))),
+       tabItem(tabName = "pheno",DT::dataTableOutput('anno')),
+       tabItem(tabName = "fastqc",htmlOutput("fastqc",height=800,width=1100)),
+       tabItem(tabName = "pcaplot",
+               fluidRow(
+                 box(
+                   width = 8, status = "primary",solidHeader = TRUE,
+                   title = "PCA Plot",
+                   fluidRow(
+                     column(6,plotOutput("biplot",width=750,height=600))
+                   )
+                 ),br(),
+               box(
+                 width = 4, status = "primary",solidHeader = TRUE,
+                 title = "Select Options",
+                 fluidRow(
+                   column(6,uiOutput("pcaxoptions")),
+                   column(6,uiOutput("pcayoptions"))
+                 ),
+                 br(),textOutput("biplottitle"),br(),
+                 fluidRow(
+                   column(6,uiOutput("pcipslide")),
+                   column(6,uiOutput("pcslide"))
+                 ),
+                 fluidRow(
+                   column(6,uiOutput("maineffect")),
+                   column(6,hr())
+                 ),
+                 br()),
+               
+               fluidRow(
+                 column(6,uiOutput("dwldbiplot")))
+               
+       )),
+       
+       tabItem(tabName = "bargraph",uiOutput("indoptions"),uiOutput("allsamp"),plotlyOutput("barplotsind_out",width = 1100, height = 800)),
+  tabItem(tabName = "libcomp",
+          DT::dataTableOutput('libcomplex'),hr(),
+          fluidRow(
+            column(6,uiOutput("xoptions")),
+            column(6,uiOutput("yoptions"))),
+          plotlyOutput("libc_bplot",width = 1200, height = 500)
+  ),
+  tabItem(tabName = "Metrics",
+          DT::dataTableOutput('metrics'),
+          fluidRow(
+            column(6,uiOutput("mxoptions")),
+            column(6,uiOutput("myoptions"))),
+          plotlyOutput("metr_bplot",width = 1200, height = 500)
+          
+  ),
+  tabItem(tabName = "markdup",
+          DT::dataTableOutput('mrkdup'),
+          fluidRow(
+            column(6,uiOutput("dxoptions")),
+            column(6,uiOutput("dyoptions"))),
+          plotlyOutput("mrkdup_bplot",width = 1200, height = 500)
+  ))))

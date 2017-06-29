@@ -1,14 +1,26 @@
-library(shinydashboard)
 #library(shinyIncubator)
 library(shiny)
-library(plotly)
 library(shinyjs)
-library(dplyr)
 library(tidyr)
 library(data.table)
 library(ggplot2)
+library(RColorBrewer)
+library(NMF)
+library(Biobase)
+library(reshape2)
+library(d3heatmap)
+library(plotly)
+library(shinyjs)
+library(htmlwidgets)
 library(DT)
-
+library(FactoMineR)
+library(factoextra)
+library(shinyRGL)
+library(rgl)
+library(ReactomePA)
+library(limma)
+library(ggrepel)
+library(dplyr)
 shinyServer(function(input, output,session) {
   
   #Read the parameter file
@@ -23,85 +35,108 @@ shinyServer(function(input, output,session) {
     selectInput("projects","Select a project",as.list(as.character(prj)))
   })
   
-  #Read the file
+  output$datasetTable<- renderTable({
+    read.csv('data/param.csv',stringsAsFactors = F)
+  }, digits = 1)
+  
+  
+  #load Rdata corresponding to selected project
+  fileload <- reactive({
+    inFile = paste('data/',as.character(input$projects),'.RData',sep = '')
+    load(inFile)
+    loaddata=STAR
+    return(loaddata)
+  })
+  
+  #Read the star_summary file
   inputfile = reactive({
-    inFile = paste('data/',as.character(input$projects),'/STAR_summary.csv',sep = '')
-    file <- fread(inFile) %>% mutate(library= gsub('.*STAR/','',library))  %>%
-      separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
-      select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    STAR=fileload()
+    inFile = STAR$starsummary
+#     file <- inFile %>% mutate(library= gsub('.*STAR/','',library))  %>%
+#       separate(library,c('id','run','lane','barcode'),sep='_') %>% mutate(pool=paste(run,lane,sep='_')) %>%
+#       dplyr::select(-Startedjobon:-MappingspeedMillionofreadsperhour)
+    file <- inFile %>% mutate(id= gsub('.*STAR/','',library)) %>%
+            dplyr::select(-Startedjobon:-MappingspeedMillionofreadsperhour,-library)
+          file=file %>% dplyr::select(id,Numberofinputreads:ofchimericreads)
+  })
+  
+  output$menuitem_loaddata <- renderMenu({
+    menuItem("Summary",  tagList(checkboxGroupInput("stats",label="Mapped Statistics",choices=list("Unique Reads"='unique',"Multi-Mapping Reads"='multi',"Unmapped Reads"='unmapped'),selected = 'unique')
+    ),
+    icon = icon("database"),tabName='mapsum')
+    
   })
   
   #cleanupthe results file
   readfile = reactive({
     file=inputfile()
-    colnames(file)=c("id","run","lane","barcode","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads","pool")
+    #colnames(file)=c("id","run","lane","barcode","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads","pool")
+    colnames(file)=c("id","Numberofinputreads","Averageinputreadlength","Uniquelymappedreads_number","Uniquelymappedreads_percentage","Averagemappedlength","Numberofsplices_Total","Numberofsplices_Annotated_sjdb","Numberofsplices_GT_AG","Numberofsplices_GC_AG","Numberofsplices_AT_AC","Numberofsplices:Non-canonical","Mismatchrateperbase","Deletionrateperbase","Deletionaveragelength","Insertionrateperbase","Insertionaveragelength","Numberofreadsmappedtomultipleloci","percentageofreadsmappedtomultipleloci","Numberofreadsmappedtotoomanyloci","percentageofreadsmappedtotoomanyloci","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other","Numberofchimericreads","ofchimericreads")
     return(file)
   })
   
-  #create bar graph for selected run and lane
-  barplot = reactive({
-    d<- inputfile()
-    d=d[d$run==input$run,]
-    d=d[d$lane==input$lane,]
-    gg=d %>% select(id,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped:toomanymismatches`,`ofreadsunmapped:tooshort`,`ofreadsunmapped:other`) %>%
-      gather("maptype","perc",-id) %>% ggplot(.,aes(x=id,y=perc,fill=maptype))+geom_bar(stat="identity", colour="white")+  scale_fill_brewer(palette="Dark2")+
-      theme_bw()+theme(
-        plot.margin=unit(x=c(0,0,0,0),units="mm"),
-        legend.position="top",
-        axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
-      ) + ylab('% Reads') 
-    #%>% layout(legend = list(x = 0.5, y = 0))
-    (gg <- ggplotly(gg))
+  #read phenofile and merge it with the summary files
+#   readpheno = reactive({
+#     inFile = paste('data/',as.character(input$projects),'/Phenodata.csv',sep = '')
+#     pheno=read.csv(inFile)
+#     return(pheno)
+#   })
+#   
+#   output$pheno = DT::renderDataTable({
+#     DT::datatable(readpheno(),
+#                   extensions = c('Buttons','Scroller'),
+#                   options = list(dom = 'Bfrtip',
+#                                  searchHighlight = TRUE,
+#                                  pageLength = 10,
+#                                  lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+#                                  scrollX = TRUE,
+#                                  buttons = c('copy', 'print')
+#                   ),rownames=FALSE,caption= "Library complex")
+#   })
+#   
+
+  addResourcePath("library", "/Users/bapoorva/Desktop/Shiny/rna-web_git/")
+  output$fastqc = renderUI({
+    tags$iframe(seamless="seamless",src=paste0("library/STARsum/data/www/",input$projects,"_multiqc_report.html"), height=1400, width=1300)
   })
-  
-  # bar graph output
-  output$barplot_out = renderPlotly({
-    barplot()
-  })
-  
-  #populate drop down (run)
-  output$baroptions <- renderUI({
-    d<- inputfile()
-    run=sort(unique(d$run))
-    selectInput("run", "Select run",as.list(as.character(run)))
-  })
-  
-  #populate drop down (lane)
-  output$laneoptions <- renderUI({
-    d<- inputfile()
-    d=d[d$run==input$run,]
-    lane=sort(as.numeric(unique(d$lane)))
-    selectInput("lane", "Select lane",as.list(as.character(lane)))
-  })
-  
-  observe({
-    if(input$barplotop>0){
-      updateTabsetPanel(session = session, inputId = 'tabvalue', selected = 'tab1')}
-  })
-  
-  ####################################
-  ####################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
   #populate drop down (samples)
   output$indoptions <- renderUI({
     d<- inputfile()
     ind=sort(unique(d$id))
-    selectInput("ind", "Select lane",as.list(as.character(ind)))
+    selectInput("ind", "Select ID",as.list(as.character(ind)))
+  })
+  
+  output$allsamp <- renderUI({
+  checkboxInput("allsamp", label = "Click to view all samples", value = FALSE)
+  })
+  
+  output$mapsum = renderUI({
+    pd=anno()
+    sel=input$mapsumoptions
+    v2=paste("pd$",sel,sep="")
+    v2=unique(eval(parse(text=v2)))
+    selectInput("mapsumoptions2","Select a project",as.list(as.character(v2)))
   })
   
   #create bar graph for selected samples
   barplotind = reactive({
     d<- inputfile()
-    d=d[d$id==input$ind,]
-    d$lib=paste0(d$run,"_",d$lane)
-    d$library=d$lib
-    p=d %>% select(library,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped:toomanymismatches`,`ofreadsunmapped:tooshort`,`ofreadsunmapped:other`) %>%
-      gather("maptype","perc",-library) %>% ggplot(.,aes(x=library,y=perc,fill=maptype))+geom_bar(stat="identity", colour="white")+  scale_fill_brewer(palette="Dark2")+
-      theme_bw()+theme(
-        plot.margin=unit(x=c(0,0,0,0),units="mm"),
-        legend.position="top",
-        axis.text.x  = element_text(angle=40, vjust=0.5, size=9)
-      ) + ylab('% Reads')
-    (gg <- ggplotly(p))
+    if(input$allsamp == TRUE){
+      d=d
+    }else{
+    d=d[d$id==input$ind,]}
+    p=d %>% dplyr::select(id,`Uniquelymappedreads`,`ofreadsmappedtomultipleloci`,`ofreadsmappedtotoomanyloci`,`ofreadsunmapped.toomanymismatches`,`ofreadsunmapped.tooshort`,`ofreadsunmapped.other`) %>%
+      gather("maptype","perc",-id) 
+    p=plot_ly(p,x=~id,y=~perc,color=~maptype,type='bar') %>%
+      layout(title = "Bargraph - Samples",barmode='stack',xaxis = list(title = "ID"),yaxis = list(title = "percentage"),margin=list(b=120,pad=4))
+    
+   (gg <- ggplotly(p))
   })
   
  
@@ -109,51 +144,47 @@ shinyServer(function(input, output,session) {
     barplotind()
   })
   
-  observe({
-    if(input$barplotind>0){
-      updateTabsetPanel(session = session, inputId = 'tabvalue', selected = 'tab2')}
-  })
-  
-  ######################################
-  ######################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
   #Create table for uniquely mapped reads with link to FASTQC html files
   table_unique = reactive({
     dt = readfile()
-    run=dt$run
-    lane=dt$lane
-    barcode=dt$barcode
-    link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-    link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-    
+#     run=dt$run
+#     lane=dt$lane
+#     barcode=dt$barcode
+#     link1_name=paste0(run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+#     link2_name=paste0(run,"_s_",lane,"_2_",barcode,"_fastqc.html")
+#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
+#     
     dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:20],pool=dt[,30])
+    dt=dt %>% dplyr::select(id:Insertionaveragelength)
     return(dt)
   })
   #Create table for multi-mapped reads with link to FASTQC html files
   table_multi = reactive({
     dt = readfile()
-    run=dt$run
-    lane=dt$lane
-    barcode=dt$barcode
-    link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-    link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-    dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:5],dt[,21:24],pool=dt[,30])
+#     run=dt$run
+#     lane=dt$lane
+#     barcode=dt$barcode
+#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
+#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
+#     dt=as.data.frame(dt)
+    dt=dt %>% dplyr::select(id,Numberofinputreads,Numberofreadsmappedtomultipleloci:percentageofreadsmappedtotoomanyloci)
     return(dt)
   })
   #Create table for unmapped reads with link to FASTQC html files
   table_unmapped = reactive({
-    dt = readfile()
-    run=dt$run
-    lane=dt$lane
-    barcode=dt$barcode
-    link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
-    link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
-    dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
-    dt=as.data.frame(dt)
-    dt=data.frame(dt[,1:5],dt[,25:30])
+     dt = readfile()
+#     run=dt$run
+#     lane=dt$lane
+#     barcode=dt$barcode
+#     link1_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_1_",barcode,"_fastqc.html")
+#     link2_name=paste0("/fujfs/d3/MAGnet_RNAseq_v2/fastQC/",run,"_s_",lane,"_2_",barcode,"_fastqc.html")
+#     dt$run=paste0("<a href='",link1_name,"'target='_blank'>",dt$run,"_1","</a>","\n","<a href='",link2_name,"'target='_blank'>",dt$run,"_2","</a>")
+    #dt=as.data.frame(dt)
+    dt=dt %>% dplyr::select(id,Numberofinputreads,percentageofreadsunmapped_toomanymismatches:ofchimericreads)
     return(dt)
   })
   #~~~~~~~~~~~~~~~~~~~~
@@ -205,7 +236,7 @@ shinyServer(function(input, output,session) {
   })
   
   output$ui_unmapped = renderUI({
-    cols3=c("percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_tooshort","percentageofreadsunmapped_other")
+    cols3=c("percentageofreadsunmapped_tooshort","percentageofreadsunmapped_toomanymismatches","percentageofreadsunmapped_other")
     selectInput("attr3","Select an attribute for the boxplot",as.list(as.character(cols3)))
   })
   #~~~~~~~~~~~~~~~~~~~~
@@ -213,49 +244,481 @@ shinyServer(function(input, output,session) {
   boxplot1_out = reactive({
     d=readfile()
     attr1=input$attr1
+    pd=anno()
+    sel=input$mapsumoptions
+    v2=paste("pd$",sel,sep="")
+    v2=eval(parse(text=v2))
+    d$group=ifelse(d$id %in% pd$Sample ==T,as.character(v2),"NA")
+    sel2=input$mapsumoptions2
+    d=d[d$group==as.character(parse(text=sel2)),]
     v=paste("d$",attr1,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
-      layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr1)))
+    p <- plot_ly(d,x=~id,y=~v,color=~id) %>%
+      layout(title = "PLOT",xaxis = list(title ="ID"),yaxis = list(title = as.character(attr1)),margin=list(b=120,pad=4))
+    p
   })
   #Generate box-plot (multi-mapped)
   boxplot2_out = reactive({
     d=readfile()
     attr2=input$attr2
+    pd=anno()
+    sel=input$mapsumoptions
+    v2=paste("pd$",sel,sep="")
+    v2=eval(parse(text=v2))
+    d$group=ifelse(d$id %in% pd$Sample ==T,as.character(v2),"NA")
+    sel2=input$mapsumoptions2
+    d=d[d$group==as.character(parse(text=sel2)),]
     v=paste("d$",attr2,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
-      layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr2)))
+    
+    p <- plot_ly(d,x=~id,y=~v,color=~id) %>%
+      layout(title = "PLOT",xaxis = list(title ="ID"),yaxis = list(title = as.character(attr2)),margin=list(b=120,pad=4)) 
+
   })
   #Generate box-plot (unmapped)
   boxplot3_out = reactive({
     d=readfile()
     attr3=input$attr3
+    pd=anno()
+    sel=input$mapsumoptions
+    v2=paste("pd$",sel,sep="")
+    v2=eval(parse(text=v2))
+    d$group=ifelse(d$id %in% pd$Sample ==T,as.character(v2),"NA")
+    sel2=input$mapsumoptions2
+    d=d[d$group==as.character(parse(text=sel2)),]
     v=paste("d$",attr3,sep="")
     v=eval(parse(text=v))
-    p <- plot_ly(d,x=~pool,y=~v,color=~pool, type = "box") %>%
-      layout(title = "BOX PLOT",xaxis = list(title ="pool"),yaxis = list(title = as.character(attr3)))
+    
+    p <- plot_ly(d,x=~id,y=~v,color=~id) %>%
+      layout(title = "PLOT",xaxis = list(title ="ID"),yaxis = list(title = as.character(attr3)),margin=list(b=120,pad=4))
   })
 
 
-#~~~~~~~~~~~~~~~~~~~~
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  #########################DISPLAY Merged data libcomplex and metrics data #########################################
+  ##################################################################################################################
+  ##################################################################################################################
+# 
+  #Read file based on id selected
+  libcomplex = reactive({
+    STAR=fileload()
+    df =STAR$libcomplex
+    validate(
+      need(nrow(df) != 0, "Information not available")
+    )
+return(df)
+  })
+  
+  metrics = reactive({
+    STAR=fileload()
+    df2=STAR$metrics
+    validate(
+      need(nrow(df2) != 0, "Information not available")
+    )
+    df2$Sample=rownames(df2)
+    df=as.data.frame(df2)
+    rownames(df)=df$Sample
+    df=as.data.frame(df)
+  })
+  
+  mrkdup = reactive({
+    STAR=fileload()
+    df=STAR$markdups
+    validate(
+      need(nrow(df) != 0, "Information not available")
+    )
+    df$Sample=rownames(df)
+    df=as.data.frame(df)
+    rownames(df)=df$Sample
+    return(df)
+  })
+  
+  #print raw star summary report in tab3
+  output$libcomplex = DT::renderDataTable({
+    DT::datatable(libcomplex(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=TRUE,caption= "Library complex")
+  })
+  output$mrkdup = DT::renderDataTable({
+    DT::datatable(mrkdup(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=TRUE,caption= "Mark duplicates")
+  })
+  
+  output$metrics = DT::renderDataTable({
+    DT::datatable(metrics(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=TRUE,caption= "Metrics")
+  })
+
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  #########################DISPLAY annotation data #########################################
+  ##################################################################################################################
+  ##################################################################################################################
+
+  anno = reactive({
+    v = fileload()
+    validate(
+      need(nrow(v$pData) !=0, "No phenotype information. Please check RData for pheno file")
+    )
+    pData<-v$pData
+    return(pData)
+    
+  })
+  
+  output$anno = DT::renderDataTable({
+    DT::datatable(anno(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=FALSE,caption= "PhenoData")
+  })
+  
+
+#   ##################################################################################################################
+#   ##################################################################################################################
+#   ##################################################################################################################
+#   #Populate dropdowns for distribution
+  output$yoptions <- renderUI({
+    d<- libcomplex()
+    d=d %>% dplyr::select(-Sample,-LIBRARY)
+    fac=colnames(d)
+    selectInput("yoptions", "Select y attribute",as.list(as.character(fac)))
+  })
+  
+  output$xoptions <- renderUI({
+    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    selectInput("xoptions", "Select x attribute",as.list(as.character(fac)))
+  })
+  
+  output$mxoptions <- renderUI({
+    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    selectInput("mxoptions", "Select x attribute",as.list(as.character(fac)))
+  })
+  
+  output$myoptions <- renderUI({
+    d<- metrics()
+    d=d %>% dplyr::select(-Sample)
+    fac=colnames(d)
+    selectInput("myoptions", "Select y attribute",as.list(as.character(fac)))
+  })
+  
+  output$dxoptions <- renderUI({
+    #pheno=readpheno()
+    #run=sort(unique(d$run))
+    #fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    #fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    selectInput("dxoptions", "Select x attribute",as.list(as.character(fac)))
+  })
+  
+  output$dyoptions <- renderUI({
+    d<- mrkdup()
+    #run=sort(unique(d$run))
+    d=d %>% dplyr::select(-Sample,-LIBRARY)
+    fac=colnames(d)
+    selectInput("dyoptions", "Select y attribute",as.list(as.character(fac)))
+  })
+  
+  #create bar graph for selected samples
+  libcplot = reactive({
+    d= libcomplex()
+    # pheno=anno()
+    all <-d
+    xoptions=input$xoptions
+    yoptions=input$yoptions
+    yop=paste("all$",yoptions,sep="")
+    yop=eval(parse(text=yop))
+    xop=paste("all$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
+    layout(title = "BOX PLOT",xaxis = list(title =as.character(input$xoptions)),yaxis = list(title = as.character(input$yoptions)))
+    (gg <- ggplotly(p))
+  })
+
+  
+  metricsplot = reactive({
+    d= metrics()
+    all=d
+    xoptions=input$mxoptions
+    yoptions=input$myoptions
+    yop=paste("all$",yoptions,sep="")
+    yop=eval(parse(text=yop))
+    xop=paste("all$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
+      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)))
+    (gg <- ggplotly(p))
+  })
+  
+  mrkdupsplot = reactive({
+    d= mrkdup()
+    all=d
+#     pheno=readpheno()
+#     all <- inner_join(d,pheno,by='Sample') %>% dplyr::mutate(Pool=paste(Flowcell,Lane,sep='_'))
+    xoptions=input$dxoptions
+    yoptions=input$dyoptions
+    yop=paste("all$",yoptions,sep="")
+    yop=eval(parse(text=yop))
+    xop=paste("all$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
+      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)))
+    (gg <- ggplotly(p))
+  })
+  output$libc_bplot = renderPlotly({
+    libcplot()
+  })
+  
+  output$metr_bplot = renderPlotly({
+    metricsplot()
+  })
+  
+  output$mrkdup_bplot = renderPlotly({
+    mrkdupsplot()
+  })
+
+  ###################################################
+  ###################################################
+  ##################### PCA PLOT ####################
+  ###################################################
+  ###################################################
+  output$pcaxoptions <- renderUI({
+    selectInput("pcaxaxes","Select Principle Component to plot on the X-axis ",c(1:10))
+  })
+  
+  output$pcipslide <- renderUI({
+    textInput(inputId = 'pcipslide', label = "Enter top number of input genes that show maximum variance", value = '500')
+    #sliderInput("pcipslide", label = h5("Slider: Number of input genes that show maximum variance"), min = 100,max = 1000, value = 200)
+  })
+  
+  output$pcslide <- renderUI({
+    textInput(inputId = 'pcslide', label = "Enter number of genes to view in the biplot", value = '0')
+    #sliderInput("pcslide", label = h5("Slider: Number of genes to view in the biplot"), min = 2,max = 50, value = 30)
+  })
+  
+  output$pcayoptions <- renderUI({
+    selectInput("pcayaxes","Select Principle Component to plot on the Y-axis",c(1:10),selected=2)
+  })
+  
+  output$biplottitle <- renderText({
+    pcaxaxes=input$pcaxaxes
+    pcayaxes=input$pcayaxes
+    text=as.character(paste("Dim",pcaxaxes," vs Dim",pcayaxes,sep=""))
+    return(text)
+  })
+  
+  output$maineffect <- renderUI({
+    pData=anno()
+    selectInput("maineffect", "Select Group",as.list(as.character(colnames(pData))))
+  })
+  
+  plotbiplot = reactive({
+    res.pca = res_pca()
+    x=as.numeric(input$pcaxaxes)
+    y=as.numeric(input$pcayaxes)
+    STAR=fileload()
+    v = STAR$eset
+    maineffect=input$maineffect
+    me=paste("pData$",maineffect,sep="")
+    me2=eval(parse(text=me))
+    pData<-phenoData(v)
+    validate(
+      need(input$pcslide, "Enter number of genes to view in biplot")
+    )
+    if(input$pcslide==0){
+      fviz_pca_ind(res.pca, repel=T,geom='point',label='var',addEllipses=FALSE, habillage = me2,pointsize = 3.35,axes=c(x,y))+scale_shape_manual(values = c(rep(19,length(unique(me2)))))+theme(axis.title.x = element_text(face="bold", size=14),
+                                                                                                                                                                                                                          axis.title.y = element_text(face="bold", size=14),
+                                                                                                                                                                                                                          legend.text  = element_text(angle=0, vjust=0.5, size=14),
+                                                                                                                                                                                                                          legend.title  = element_text(angle=0, vjust=0.5, size=14),
+                                                                                                                                                                                                                          plot.title  = element_text(angle=0, vjust=0.5, size=16))
+      
+    }
+    #fviz_pca_ind(res.pca, geom = c("point", "text"))}
+    else{fviz_pca_biplot(res.pca,repel=T, label=c("var","ind"),habillage = as.factor(me2),pointsize = 3.35,axes=c(x,y),select.var = list(contrib = as.numeric(input$pcslide)))+scale_shape_manual(values = c(rep(19,length(unique(me2)))))+theme(axis.title.x = element_text(face="bold", size=14),
+                                                                                                                                                                                                                                                                           axis.title.y = element_text(face="bold", size=14),
+                                                                                                                                                                                                                                                                           legend.text  = element_text(angle=0, vjust=0.5, size=14),
+                                                                                                                                                                                                                                                                           legend.title  = element_text(angle=0, vjust=0.5, size=14),
+                                                                                                                                                                                                                                                                           plot.title  = element_text(angle=0, vjust=0.5, size=16))}
+  })
+  
+  output$biplot = renderPlot({
+    plotbiplot()
+  })
+  
+  output$dwldbiplot = renderUI({
+    downloadButton('downloadbiplot', 'Download Biplot')
+  }) 
+  
+  output$downloadbiplot <- downloadHandler(
+    filename = function() {
+      paste0("biplot.jpg")
+    },
+    content = function(file){
+      jpeg(file, quality = 100, width = 800, height = 800)
+      plot(plotbiplot())
+      dev.off()
+    })
+  
+#   ###################################################
+#   ###################################################
+#   ########### VARIANCES OF PCA PLOT #################
+#   ###################################################
+#   ###################################################
+#   
+#   output$pcatitle <- renderText({
+#     text="The proportion of variances retained by the principal components can be viewed in the scree plot. The scree plot is a graph of the eigenvalues/variances associated with components"
+#     return(text)
+#   })
+#   
+  #get expression data and perform PCA
+  res_pca = reactive({
+    n=as.numeric(input$pcipslide)
+    validate(
+      need(as.numeric(input$pcipslide) > 199, "Minimum value of input genes that show maximum variance should at least be 200")
+    )
+    STAR=fileload()
+    v = STAR$eset
+    keepGenes <- v@featureData@data
+    #keepGenes <- v@featureData@data %>% filter(!(seq_name %in% c('X','Y')) & !(is.na(SYMBOL)))
+    pData<-phenoData(v)
+    v.filter = v[rownames(v@assayData$exprs) %in% rownames(keepGenes),]
+    Pvars <- apply(exprs(v.filter),1,var)
+    select <- order(Pvars, decreasing = TRUE)[seq_len(min(n,length(Pvars)))]
+    v.var <-v.filter[select,]
+    m<-exprs(v.var)
+    rownames(m) <- v.var@featureData@data$SYMBOL
+    m=as.data.frame(m)
+    m=unique(m)
+    res.pca = PCA(t(m), graph = FALSE)
+  })
+#   
+#   #get expression data and perform PCA
+#   pcaplo_tab = reactive({
+#     res.pca =res_pca()
+#     eigenvalues = res.pca$eig
+#     return(eigenvalues)
+#   })
+#   
+#   output$pcaplot_tab = DT::renderDataTable({
+#     DT::datatable(pcaplo_tab(),
+#                   extensions = c('Scroller'),
+#                   options = list(
+#                     searchHighlight = TRUE,
+#                     scrollX = TRUE
+#                   ))
+#   })
+#   
+#   output$pcaplot_ip = renderPlot({
+#     res.pca = res_pca()
+#     fviz_screeplot(res.pca, ncp=10)
+#   })
+#   
+  
+  ###################################################
+  ###################################################
+  ##################3D PCA PLOT #####################
+  ###################################################
+  ###################################################
+  output$pcaplot3d = renderRglwidget({
+    v=datasetInput3()
+    results=fileload()
+    pData=pData(results$eset)
+    v=t(v)
+    v= v[,apply(v, 2, var, na.rm=TRUE) != 0]
+    #      pca <- prcomp( v, scale= TRUE )
+    #      vars <- apply(pca$x, 2, var)
+    #      props <- round((vars / sum(vars))*100,1)
+    #      groups=factor(gsub('-','_',pData$maineffect))
+    
+    pca <- res_pca()
+    vars <- apply(pca$var$coord, 2, var)
+    props <- round((vars / sum(vars))*100,1)
+    groups=factor(gsub('-','_',pData$maineffect))
+    
+    
+    ########
+    try(rgl.close())
+    open3d()
+    # resize window
+    par3d(windowRect = c(100, 100, 612, 612))
+    palette(c('blue','red','green','orange','cyan','black','brown','pink'))
+    plot3d(pca$ind$coord[,1:3], col =as.numeric(groups), type='s',alpha=.75,axes=F,
+           xlab=paste('PC1 (',props[1],'%)',sep=''),
+           ylab=paste('PC2 (',props[2],'%)',sep=''),
+           zlab=paste('PC3 (',props[3],'%)',sep='')
+    )
+    axes3d(edges=c("x--", "y--", "z"), lwd=2, expand=10, labels=FALSE,box=T)
+    grid3d("x")
+    grid3d("y")
+    grid3d("z")
+    l=length(levels(groups))
+    ll=1:l
+    y=1+(ll*15)
+    text3d(x=70, y=y, z=0.75,levels(groups) ,col="black")
+    points3d(x=90, y=y, z=0.75, col=as.numeric(as.factor(levels(groups))), size=6)
+    legend3d("topright", legend = levels(groups), pch = 16, col=palette(),cex=1, inset=c(0.02))
+    
+    #      rgl.snapshot('PCA_3d_test.png', fmt = "png", top = TRUE )
+    #      rgl.postscript('PCA_3D_test.pdf',fmt='pdf')
+    
+    #movie3d(spin3d(), duration = 5,movie='PCA_movie',dir='./' )
+    rglwidget()
+  })
+  ##################################################################################################################
+  ##################################################################################################################
+  ##################################################################################################################
+  ###############################################   USER-InTERFACE ################################################
+  ##################################################################################################################
+  ##################################################################################################################
   #User-Interface
+
   output$plotUI = renderUI({
     do.call(tabsetPanel,
             lapply(input$stats,function(s){ #for either upregulated/downregulated selected
               call("tabPanel",s,
-                   call('dataTableOutput',paste0("table_",s)),
-                   call("downloadButton",paste0("save_",s),'Save as csv'),
                    call('uiOutput',paste0("ui_",s)),
-                   call("plotlyOutput",paste0("boxplot_",s))
+                   call("plotlyOutput",paste0("boxplot_",s),width="1000",height="500"),hr(),
+                   call('dataTableOutput',paste0("table_",s)),
+                   call("downloadButton",paste0("save_",s),'Save as csv')
               )
             })
     )
   })
+#   output$plotUI = renderUI({
+#     fac=c("apoo","prachu                                                                                                                                                                            ")
+#     selectInput("kt", "Select y attribute",as.list(as.character(fac)))
+#   })
   
   observe({
+    
     lapply(input$stats, function(s){
-      
       ## Add a DataTable 
       output[['table_unique']] <- DT::renderDataTable(table_unique(),options=list(iDisplayLength=10))
       output[['table_multi']] <- DT::renderDataTable(table_multi(),options=list(iDisplayLength=10))
@@ -320,7 +783,7 @@ shinyServer(function(input, output,session) {
       return(s)
     })
   })
-  
+ 
   
   
 })
