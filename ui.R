@@ -16,6 +16,7 @@ dashboardPage(
                    sidebarMenu(
                      menuItemOutput("menuitem_loaddata"),
                      menuItem("PhenoData", tabName = "pheno", icon = icon("hand-o-right")),
+                     menuItem("Full Unmerged PhenoData", tabName = "pheno2", icon = icon("hand-o-right")),
                      menuItem("FastQC Report", tabName = "fastqc", icon = icon("hand-o-right")),
                      menuItem('PCA-Plot', tabName = 'pcaplot', icon = icon('hand-o-right')), 
                      menuItem("Bargraph-Samples", tabName = "bargraph", icon = icon("bar-chart")),
@@ -44,6 +45,7 @@ dashboardPage(
                    uiOutput("mapsum")
        ))),
        tabItem(tabName = "pheno",DT::dataTableOutput('anno')),
+       tabItem(tabName = "pheno2",DT::dataTableOutput('anno_full')),
        tabItem(tabName = "fastqc",htmlOutput("fastqc",height=800,width=1100)),
        tabItem(tabName = "pcaplot",
                fluidRow(
@@ -90,14 +92,12 @@ dashboardPage(
                 fluidRow(
                   column(6,uiOutput("xoptions")),
                   column(6,uiOutput("yoptions"))),
-                fluidRow(
-                  column(6,uiOutput("xop2")),
-                  column(6,hr()))
-            ))),
+                uiOutput("xopsub")
+            ))
+          ),
   tabItem(tabName = "Metrics",
           fluidRow(
-            box(
-              width = 8, status = "primary",solidHeader = TRUE,
+            box(width = 8, status = "primary",solidHeader = TRUE,
               title = "Mapped Summary",
               DT::dataTableOutput('metrics'),hr(),
               plotlyOutput("metr_bplot",width = 1200, height = 500)
@@ -105,7 +105,8 @@ dashboardPage(
             box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
                 fluidRow(
                   column(6,uiOutput("mxoptions")),
-                  column(6,uiOutput("myoptions")))
+                  column(6,uiOutput("myoptions"))),
+                uiOutput("mxopsub")
             ))),
   tabItem(tabName = "markdup",
           fluidRow(
@@ -118,7 +119,8 @@ dashboardPage(
             box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
                 fluidRow(
                   column(6,uiOutput("dxoptions")),
-                  column(6,uiOutput("dyoptions")))
+                  column(6,uiOutput("dyoptions"))),
+                uiOutput("dxopsub")
             )))
   
   )))

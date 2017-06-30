@@ -304,7 +304,7 @@ return(df)
   
   mrkdup = reactive({
     STAR=fileload()
-    df=STAR$markdups
+    df=STAR$markdup
     validate(
       need(nrow(df) != 0, "Information not available")
     )
@@ -379,6 +379,25 @@ return(df)
                   ),rownames=FALSE,caption= "PhenoData")
   })
   
+  anno_full = reactive({
+    anno=read.csv("data/Phenodata.csv")
+    anno = anno %>% dplyr::select(-X,-RNA_Prep,-Column_Index:-Genomic_DNA,-Flowcell:-Barcode,-Size_MB,-Notes)
+return(anno)
+    
+  })
+  
+  output$anno_full = DT::renderDataTable({
+    DT::datatable(anno_full(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=FALSE,caption= "PhenoData")
+  })
+  
 
 #   ##################################################################################################################
 #   ##################################################################################################################
@@ -386,27 +405,35 @@ return(df)
 #   #Populate dropdowns for distribution
   output$yoptions <- renderUI({
     d<- libcomplex()
-    d=d %>% dplyr::select(-Sample,-LIBRARY)
+    d=d %>% dplyr::select(-LIBRARY)
     fac=colnames(d)
     selectInput("yoptions", "Select y attribute",as.list(as.character(fac)))
   })
   
   output$xoptions <- renderUI({
-    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension")
     selectInput("xoptions", "Select x attribute",as.list(as.character(fac)))
   })
   
-  output$xop2 <- renderUI({
+  output$xopsub <- renderUI({
     pd=anno()
     sel=input$xoptions
     v2=paste("pd$",sel,sep="")
     v2=unique(eval(parse(text=v2)))
-    selectInput("xop2","Select one of the options",as.list(as.character(v2)))
+    selectInput("xopsub","Select one of the options",as.list(as.character(v2)))
   })
   
   output$mxoptions <- renderUI({
-    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool")
     selectInput("mxoptions", "Select x attribute",as.list(as.character(fac)))
+  })
+  
+  output$mxopsub <- renderUI({
+    pd=anno()
+    sel=input$mxoptions
+    v2=paste("pd$",sel,sep="")
+    v2=unique(eval(parse(text=v2)))
+    selectInput("mxopsub","Select one of the options",as.list(as.character(v2)))
   })
   
   output$myoptions <- renderUI({
@@ -417,8 +444,16 @@ return(df)
   })
   
   output$dxoptions <- renderUI({
-    fac=c("Sample","Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool","RIN")
+    fac=c("Library_Pool","Tissue_Source","CHF_Etiology","Gender","Race","Afib","VTVF","Diabetes","Hypertension","Random_Pool")
     selectInput("dxoptions", "Select x attribute",as.list(as.character(fac)))
+  })
+  
+  output$dxopsub <- renderUI({
+    pd=anno()
+    sel=input$dxoptions
+    v2=paste("pd$",sel,sep="")
+    v2=unique(eval(parse(text=v2)))
+    selectInput("dxopsub","Select one of the options",as.list(as.character(v2)))
   })
   
   output$dyoptions <- renderUI({
@@ -431,24 +466,20 @@ return(df)
   
   #create bar graph for selected samples
   libcplot = reactive({
-    d= libcomplex()
-    all=d
-    
+    all= libcomplex()
+    all$id=rownames(all)
     pd=anno()
-    sel=input$xoptions
-    v2=paste("pd$",sel,sep="")
-    v2=eval(parse(text=v2))
-    d$group=ifelse(d$id %in% pd$Sample ==T,as.character(v2),"NA")
-    sel2=input$xop2
-    d=d[d$group==as.character(parse(text=sel2)),]
-    # xoptions=input$xoptions
+    xoptions=input$xoptions
+    xop=paste("pd$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    all$group=ifelse(all$id %in% pd$Sample ==T,as.character(xop),"NA")
+    sel2=input$xopsub
+    all=all[all$group==as.character(sel2),]
     yoptions=input$yoptions
     yop=paste("all$",yoptions,sep="")
     yop=eval(parse(text=yop))
-#     xop=paste("all$",xoptions,sep="")
-#     xop=eval(parse(text=xop))
     p <- plot_ly(all,x=~id,y=yop,color=~id) %>%
-    layout(title = "BOX PLOT",xaxis = list(title =as.character(input$xoptions)),yaxis = list(title = as.character(input$yoptions)),margin=list(b=120,pad=4))
+    layout(title = "BOX PLOT",xaxis = list(title ="Sample"),yaxis = list(title = as.character(input$yoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
 
@@ -456,30 +487,43 @@ return(df)
   metricsplot = reactive({
     d= metrics()
     all=d
+    all$id=rownames(all)
+    pd=anno()
     xoptions=input$mxoptions
+    xop=paste("pd$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    all$group=ifelse(all$id %in% pd$Sample ==T,as.character(xop),"NA")
+    
+    sel2=input$mxopsub
+    all=all[all$group %in% as.character(sel2),]
+    
+    
     yoptions=input$myoptions
     yop=paste("all$",yoptions,sep="")
     yop=eval(parse(text=yop))
-    xop=paste("all$",xoptions,sep="")
-    xop=eval(parse(text=xop))
-    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
-      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)),margin=list(b=120,pad=4))
+    p <- plot_ly(all,x=~id,y=yop,color=~id) %>%
+      layout(title = "BOX PLOT",xaxis = list(title ="Sample"),yaxis = list(title = as.character(input$myoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
   
   mrkdupsplot = reactive({
     d= mrkdup()
     all=d
-#     pheno=readpheno()
-#     all <- inner_join(d,pheno,by='Sample') %>% dplyr::mutate(Pool=paste(Flowcell,Lane,sep='_'))
+    all$id=rownames(all)
+    pd=anno()
     xoptions=input$dxoptions
+    xop=paste("pd$",xoptions,sep="")
+    xop=eval(parse(text=xop))
+    all$group=ifelse(all$id %in% pd$Sample ==T,as.character(xop),"NA")
+    
+    sel2=input$dxopsub
+    all=all[all$group %in% as.character(sel2),]
     yoptions=input$dyoptions
     yop=paste("all$",yoptions,sep="")
     yop=eval(parse(text=yop))
-    xop=paste("all$",xoptions,sep="")
-    xop=eval(parse(text=xop))
-    p <- plot_ly(all,x=xop,y=yop,color=xop) %>%
-      layout(title = "BOX PLOT",xaxis = list(title =as.character(input$mxoptions)),yaxis = list(title = as.character(input$myoptions)),margin=list(b=120,pad=4))
+    
+    p <- plot_ly(all,x=~id,y=yop,color=~id) %>%
+      layout(title = "BOX PLOT",xaxis = list(title ='Sample'),yaxis = list(title = as.character(input$dyoptions)),margin=list(b=120,pad=4))
     (gg <- ggplotly(p))
   })
   output$libc_bplot = renderPlotly({
@@ -529,7 +573,7 @@ return(df)
     pd=colnames(pData)
     remove=c("AGE","Weight","Height","HW","LV.Mass","LVEF","Sample","RIN","Random_Pool")
     pd=pd[!pd %in% remove]
-    selectInput("maineffect", "Select Group",as.list(as.character(pd)))
+    selectInput("maineffect", "Select Group",c(as.list(as.character(pd)),"Date"))
   })
   
   plotbiplot = reactive({
