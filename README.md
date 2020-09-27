@@ -1,4 +1,4 @@
-# MAGnet_RNAseq
+# MAGNet_QC
 
 R-Shiny Framework based webpage to view the QC stats of MAGnet Data.This includes links to FASTQC files 
 
