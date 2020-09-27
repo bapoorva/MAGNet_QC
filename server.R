@@ -21,6 +21,13 @@ library(ReactomePA)
 library(limma)
 library(ggrepel)
 library(dplyr)
+
+#Create a theme for all plots.
+plotTheme <-theme_bw() + theme(axis.title.x = element_text(face="bold", size=12),
+                               axis.text.x  = element_text(angle=35, vjust=0.5, size=12),
+                               axis.title.y = element_text(face="bold", size=12),
+                               axis.text.y  = element_text(angle=0, vjust=0.5, size=12))
+
 shinyServer(function(input, output,session) {
   
   #Read the parameter file
@@ -95,7 +102,7 @@ shinyServer(function(input, output,session) {
 #   })
 #   
 
-  addResourcePath("library", "/Users/bapoorva/Desktop/Shiny/rna-web_git/")
+  addResourcePath("library", "/srv/shiny-server")
   output$fastqc = renderUI({
     tags$iframe(seamless="seamless",src=paste0("library/STARsum/data/www/",input$projects,"_multiqc_report.html"), height=1400, width=1300)
   })
@@ -382,6 +389,10 @@ return(df)
   anno_full = reactive({
     anno=read.csv("data/Phenodata.csv")
     anno = anno %>% dplyr::select(-X,-RNA_Prep,-Column_Index:-Genomic_DNA,-Flowcell:-Barcode,-Size_MB,-Notes)
+    anno = anno %>% separate(File_Name,c("filename","ext"),sep=".fastq") %>% dplyr::select(-ext)
+    file=anno$filename
+    link1_name=paste0(file,"_fastqc.html")
+    anno$filename=paste0("<a href='",link1_name,"'>",anno$filename,"</a>")
 return(anno)
     
   })
@@ -538,6 +549,27 @@ return(anno)
     mrkdupsplot()
   })
 
+  tin = reactive({
+    v = fileload()
+    validate(
+      need(nrow(v$tin) !=0, "No TIN results. Please check RData")
+    )
+    tin<-v$tin
+    return(tin)
+    
+  })
+  
+  output$tin = DT::renderDataTable({
+    DT::datatable(tin(),
+                  extensions = c('Buttons','Scroller'),
+                  options = list(dom = 'Bfrtip',
+                                 searchHighlight = TRUE,
+                                 pageLength = 10,
+                                 lengthMenu = list(c(30, 50, 100, 150, 200, -1), c('30', '50', '100', '150', '200', 'All')),
+                                 scrollX = TRUE,
+                                 buttons = c('copy', 'print')
+                  ),rownames=FALSE,caption= "TIN results")
+  })
   ###################################################
   ###################################################
   ##################### PCA PLOT ####################
@@ -647,10 +679,10 @@ return(anno)
     #keepGenes <- v@featureData@data %>% filter(!(seq_name %in% c('X','Y')) & !(is.na(SYMBOL)))
     pData<-phenoData(v)
     v.filter = v[rownames(v@assayData$exprs) %in% rownames(keepGenes),]
-    Pvars <- apply(exprs(v.filter),1,var)
+    Pvars <- apply(v.filter@assayData$exprs,1,var)
     select <- order(Pvars, decreasing = TRUE)[seq_len(min(n,length(Pvars)))]
     v.var <-v.filter[select,]
-    m<-exprs(v.var)
+    m<-v.var@assayData$exprs
     rownames(m) <- v.var@featureData@data$SYMBOL
     m=as.data.frame(m)
     m=unique(m)
@@ -729,6 +761,8 @@ return(anno)
     #movie3d(spin3d(), duration = 5,movie='PCA_movie',dir='./' )
     rglwidget()
   })
+  
+  
   ##################################################################################################################
   ##################################################################################################################
   ##################################################################################################################
@@ -821,7 +855,122 @@ return(anno)
       return(s)
     })
   })
- 
+
+  ###################################################
+  ###################################################
+  ################## LIMMA RESULTS #######################
+  ###################################################
+  ###################################################
+  #Get Limma list and populate drop-down
+  output$limmalist = renderUI({
+    results=fileload()
+    lim=results$limma
+    contrasts=as.list(as.character(unlist(lapply((names(lim)),factor))))
+    selectInput("contrast","Select a comparison",contrasts,"pick one")
+  })
+  
+  limma = reactive({
+    results=fileload()
+    k=paste("results$limma$",input$contrast,sep="")
+    limmadata=eval(parse(text = k))
+    lfc=as.numeric(input$lfc) #get logFC
+    apval=as.numeric(input$apval)#get adjusted P.Vals
+    if(is.null(input$radio))
+    {
+      d = limmadata
+    }
+    else if(input$radio=='none')
+    {
+      d=limmadata
+    }
+    else if(input$radio=='down')
+    {
+      d=limmadata
+      d = d[which(d$fc < (-1*(lfc)) & d$adj.P.Val < apval),]
+    }
+    else if(input$radio=='up')
+    {
+      d=limmadata
+      d = d[which(d$fc>lfc & d$adj.P.Val < apval),]
+    }
+    else if(input$radio=='both')
+    {
+      d=limmadata
+      d = d[which(abs(d$fc) > lfc & d$adj.P.Val < apval),]
+    }
+    d=as.data.frame(d) 
+    d$ID=rownames(d)
+    d=d %>% dplyr::select(ID,SYMBOL,ENTREZID,biotype,logFC:fc)
+    return(d)
+  })
+  
+  output$limma = DT::renderDataTable({
+    DT::datatable(limma(),
+                  extensions = c('Scroller'),
+                  options = list(
+                    searchHighlight = TRUE,
+                    scrollX = TRUE
+                  ),rownames=FALSE,selection = list(mode = 'single', selected =1),escape=FALSE)
+  })
+  
+  output$dwld <- downloadHandler(
+    filename = function() { paste("Differential_Gene_Exp_results", '.csv', sep='') },
+    content = function(file) {
+      write.csv(limma(), file)
+    })
+  ###################################################
+  ###################################################
+  ##################### DOT PLOT ####################
+  ###################################################
+  ###################################################
+  #create user interface for dot-plot drop down menu
+  output$boxplotcol = renderUI({ 
+    bpcols=c("CHF_Etiology","Tissue_Source","Gender","Race","Library_Pool")
+    selectInput("color","Select an Attribute",bpcols) #populate drop down menu with the phenodata columns
+  })
+  
+  
+  dotplot_out = reactive({
+    s = input$limma_rows_selected #select rows from table
+    dt = limma() #load limma data
+    validate(
+      need((is.data.frame(dt) && nrow(dt))!=0, "No data in table")
+    )
+    dt1 = dt[s, , drop=FALSE]#get limma data corresponding to selected row in table
+    id = rownames(dt1)
+    sym=dt1$SYMBOL
+    results=fileload()
+    eset <- results$eset
+    e <-data.frame(eset@phenoData@data,signal=eset@assayData$exprs[id,])
+    col=eval(parse(text=paste("e$",input$color,sep="")))
+    p <- plot_ly(e,x=~col,y=~signal,color=~col,type="box")  %>%
+      layout(title =sym,xaxis = list(title ="Sample"),yaxis = list(title = "Expression"),margin=list(b=120,pad=4))
+    p
+#     gg=ggplot(e,aes_string(x="CHF_Etiology",y="signal",col=input$color))+plotTheme+guides(color=guide_legend(title=as.character(input$color)))+
+#       labs(title=id, x="Condition", y="Expression Value") + geom_point(size=5,position=position_jitter(w = 0.1))+
+#       stat_summary(fun.y = "mean", fun.ymin = "mean", fun.ymax= "mean", size= 0.3, geom = "crossbar",width=.2)
+#     plot_ly(gg)
+   })
+  
+  # output dotplot
+  output$dotplot = renderPlotly({
+    dotplot_out()
+  })
+  
+  output$downloaddotplot <- downloadHandler(
+    filename = function() {
+      s = input$limma_rows_selected #select rows from table
+      dt = limma() 
+      dt1 = dt[s, , drop=FALSE]#get limma data corresponding to selected row in table
+      id = as.character(dt1$SYMBOL) 
+      paste0(id, '_dotplot.jpg', sep='') 
+      #paste0("dotplot.jpg")
+    },
+    content = function(file){
+      jpeg(file, quality = 100, width = 800, height = 800)
+      plot(dotplot_out())
+      dev.off()
+    })
   
   
 })

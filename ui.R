@@ -22,7 +22,10 @@ dashboardPage(
                      menuItem("Bargraph-Samples", tabName = "bargraph", icon = icon("bar-chart")),
                      menuItem("Library Complexity Summary", tabName = "libcomp", icon = icon("hand-o-right")),
                      menuItem("Metrics", tabName = "Metrics", icon = icon("hand-o-right")),
-                     menuItem("Mark Duplicates", tabName = "markdup", icon = icon("hand-o-right"))
+                     menuItem("Mark Duplicates", tabName = "markdup", icon = icon("hand-o-right")),
+                     menuItem("TIN", tabName = "tin", icon = icon("hand-o-right")),
+                     menuItem('Differential gene Expression', icon = icon('hand-o-right'),
+                              menuSubItem(icon=NULL,tabName = 'dge',uiOutput("limmalist")))
                    )#end of sidebar menu
 
 ),
@@ -86,7 +89,7 @@ dashboardPage(
               width = 8, status = "primary",solidHeader = TRUE,
               title = "Mapped Summary",
               DT::dataTableOutput('libcomplex'),hr(),
-              plotlyOutput("libc_bplot",width = 1200, height = 500)
+              plotlyOutput("libc_bplot",width = 1000, height = 500)
             ),
             box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
                 fluidRow(
@@ -100,7 +103,7 @@ dashboardPage(
             box(width = 8, status = "primary",solidHeader = TRUE,
               title = "Mapped Summary",
               DT::dataTableOutput('metrics'),hr(),
-              plotlyOutput("metr_bplot",width = 1200, height = 500)
+              plotlyOutput("metr_bplot",width = 1000, height = 500)
             ),
             box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
                 fluidRow(
@@ -114,13 +117,42 @@ dashboardPage(
               width = 8, status = "primary",solidHeader = TRUE,
               title = "Mapped Summary",
               DT::dataTableOutput('mrkdup'),hr(),
-              plotlyOutput("mrkdup_bplot",width = 1200, height = 500)
+              plotlyOutput("mrkdup_bplot",width = 1000, height = 500)
             ),
             box(width = 4, status = "primary",solidHeader = TRUE,title = "Controls",
                 fluidRow(
                   column(6,uiOutput("dxoptions")),
                   column(6,uiOutput("dyoptions"))),
                 uiOutput("dxopsub")
-            )))
-  
+            ))),
+  tabItem(tabName = "tin",
+          fluidRow(
+            box(
+              width = 8, status = "primary",solidHeader = TRUE,
+              title = "Tin results",
+              DT::dataTableOutput('tin')
+            ))),
+  tabItem(tabName = "dge",
+          fluidRow(
+            box(width = 8, status = "primary",solidHeader = TRUE,title = "Dot Plot of the gene of interest",
+                fluidRow(
+                  column(6,uiOutput("boxplotcol"))
+                ),
+                fluidRow(
+                  column(6,plotlyOutput('dotplot',width = 800))
+                )),
+            box(width = 4, status = "primary",solidHeader = TRUE,title = "Gene Selection",
+                radioButtons("radio", label = h4("Gene Selection"),
+                             choices = c("None" = 'none',"Upregulated" = 'up', "Downregulated" = 'down', "Both" = 'both'),
+                             selected = 'none'),
+                
+                sliderInput("lfc", label = h4("Fold Change"), min = 0.5,max = 6, value = 2),
+                sliderInput("apval", label = h4("P. Value"), min = 0.01,max = 0.2, value =0.05),br(),
+                fluidRow(
+                  column(6,downloadButton('dwld','Download results table')),
+                  column(6,downloadButton('downloaddotplot', 'Download Dot plot')))
+            )),
+          
+          box(width = 12, status = "primary",solidHeader = TRUE,title = "Limma data",
+              br(),textOutput("contrdesc"),br(),DT::dataTableOutput('limma')))
   )))
